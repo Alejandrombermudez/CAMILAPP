@@ -32,24 +32,34 @@ export class CamilappDB extends Dexie {
 
 export const db = new CamilappDB()
 
+// Seed the local catalog with the bundled fallback only when it's still empty.
 export async function seedCatalogIfEmpty(
-  sbPoligs: Poligono[],
-  sbActs: ActividadCatalogo[],
-  sbDets: DetalleCatalogo[],
-  fallbackPoligs: Poligono[],
-  fallbackActs: ActividadCatalogo[],
-  fallbackDets: DetalleCatalogo[],
+  poligs: Poligono[],
+  acts: ActividadCatalogo[],
+  dets: DetalleCatalogo[],
 ) {
   const count = await db.poligonos.count()
   if (count > 0) return
-
-  const poligs = sbPoligs.length ? sbPoligs : fallbackPoligs
-  const acts   = sbActs.length   ? sbActs   : fallbackActs
-  const dets   = sbDets.length   ? sbDets   : fallbackDets
 
   await db.transaction('rw', [db.poligonos, db.actividades_catalogo, db.detalles_catalogo], async () => {
     await db.poligonos.bulkPut(poligs)
     await db.actividades_catalogo.bulkPut(acts)
     await db.detalles_catalogo.bulkPut(dets)
+  })
+}
+
+// Overwrite the local catalog with fresh rows from Supabase. Safe because catalog
+// ids are stable (defined in catalog-data), so bulkPut updates in place without
+// breaking poligono_id references in stored reportes. Rows removed upstream are
+// intentionally kept locally to avoid dangling references.
+export async function refreshCatalogFromServer(
+  poligs: Poligono[],
+  acts: ActividadCatalogo[],
+  dets: DetalleCatalogo[],
+) {
+  await db.transaction('rw', [db.poligonos, db.actividades_catalogo, db.detalles_catalogo], async () => {
+    if (poligs.length) await db.poligonos.bulkPut(poligs)
+    if (acts.length)   await db.actividades_catalogo.bulkPut(acts)
+    if (dets.length)   await db.detalles_catalogo.bulkPut(dets)
   })
 }

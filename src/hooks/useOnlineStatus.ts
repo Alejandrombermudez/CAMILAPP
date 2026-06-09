@@ -2,18 +2,18 @@
 import { useState, useEffect } from 'react'
 
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  )
+  // Start as `true` so server and first client render agree (avoids a hydration
+  // mismatch when the device loads offline); sync to the real value after mount.
+  const [isOnline, setIsOnline] = useState(true)
 
   useEffect(() => {
-    const on  = () => setIsOnline(true)
-    const off = () => setIsOnline(false)
-    window.addEventListener('online',  on)
-    window.addEventListener('offline', off)
+    const update = () => setIsOnline(navigator.onLine)
+    update()
+    window.addEventListener('online',  update)
+    window.addEventListener('offline', update)
     return () => {
-      window.removeEventListener('online',  on)
-      window.removeEventListener('offline', off)
+      window.removeEventListener('online',  update)
+      window.removeEventListener('offline', update)
     }
   }, [])
 

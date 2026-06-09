@@ -1,7 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useFormStore } from '@/hooks/useFormStore'
 import { db } from '@/lib/local-db'
+import { aplicarAvanceEfectivo, estadoCorte, type AvanceResultado } from '@/lib/avance'
+import { EstadoCorteBadge } from '@/components/EstadoCorteBadge'
 import { CalendarPicker } from '@/components/CalendarPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +49,10 @@ export default function Hoja3({
   const [submitting, setSubmitting] = useState(false)
   const [conflicto, setConflicto] = useState(false)
   const [avanceError, setAvanceError] = useState('')
+  const [avancePct, setAvancePct] = useState<number | null>(null)
+  const [sobrescribir, setSobrescribir] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
+  const [resultadoAvance, setResultadoAvance] = useState<AvanceResultado | null>(null)
 
   // ── Build rendimiento rows from Hoja 2 activity groups ────────
   useEffect(() => {
@@ -118,6 +125,37 @@ export default function Hoja3({
       await onFormSubmit()
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleAplicarAvance = async () => {
+    if (!store.avance_fecha_inicio || !store.avance_fecha_fin) {
+      setAvanceError('Selecciona el rango de fechas.')
+      return
+    }
+    if (avancePct === null || avancePct < 0 || avancePct > 100) {
+      setAvanceError('Ingresa un % válido (0–100).')
+      return
+    }
+    setAvanceError('')
+    setAplicando(true)
+    try {
+      const res = await aplicarAvanceEfectivo(
+        store.avance_fecha_inicio,
+        store.avance_fecha_fin,
+        avancePct,
+        { sobrescribirConfirmados: sobrescribir },
+      )
+      setResultadoAvance(res)
+      if (res.actualizados > 0) {
+        toast.success(`Se actualizaron ${res.actualizados} corte(s) al ${avancePct}%`)
+      } else if (res.totalCortes === 0) {
+        toast.info('No hay subactividades de corte en ese rango.')
+      } else {
+        toast.info('No había cortes pendientes en ese rango.')
+      }
+    } finally {
+      setAplicando(false)
     }
   }
 
@@ -217,7 +255,10 @@ export default function Hoja3({
                   {/* % Área Efectiva — solo para corte */}
                   {fila.esCorte && (
                     <div className="space-y-1 border-t border-red-200 pt-3">
-                      <Label className="text-xs text-red-700">% Área Efectiva (0–100)</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-red-700">% Área Efectiva (0–100)</Label>
+                        <EstadoCorteBadge estado={estadoCorte(true, fila.porcentajeAreaEfectiva)} />
+                      </div>
                       <Input
                         type="number"
                         min={0}
@@ -250,8 +291,9 @@ export default function Hoja3({
         <div>
           <h2 className="text-lg font-semibold text-green-800">Avance Efectivo</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Define un intervalo de fechas para actualizar el % Área Efectiva de todas las
-            subactividades de <strong>corte</strong> dentro de ese rango.
+            Aplica un <strong>% Área Efectiva</strong> a todas las subactividades de{' '}
+            <strong>corte</strong> dentro de un rango de fechas, para confirmar en bloque las que
+            quedaron pendientes. Es una acción independiente de guardar el informe.
           </p>
         </div>
 
@@ -271,13 +313,43 @@ export default function Hoja3({
           />
         </div>
 
+        <div className="flex items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">% Área Efectiva a aplicar</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              placeholder="Ej: 85"
+              value={avancePct ?? ''}
+              onChange={e => setAvancePct(e.target.value ? Number(e.target.value) : null)}
+              className="w-32"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={handleAplicarAvance}
+            disabled={aplicando || !store.avance_fecha_inicio || !store.avance_fecha_fin}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {aplicando ? 'Aplicando…' : 'Aplicar al rango'}
+          </Button>
+        </div>
+
         {conflicto && (
           <Alert variant="warning">
             <AlertTriangle size={16} />
-            <AlertTitle>Conflicto detectado</AlertTitle>
+            <AlertTitle>Ya hay cortes confirmados en ese rango</AlertTitle>
             <AlertDescription>
-              Hay registros en ese intervalo que ya tienen % Área Efectiva. Si continúas,
-              se actualizarán con los valores que ingreses arriba.
+              Algunos cortes del intervalo ya tienen % registrado; por defecto no se tocan.
+              <label className="mt-2 flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sobrescribir}
+                  onChange={e => setSobrescribir(e.target.checked)}
+                />
+                Sobrescribir también los ya confirmados
+              </label>
             </AlertDescription>
           </Alert>
         )}
@@ -287,6 +359,14 @@ export default function Hoja3({
             <CheckCircle2 size={15} />
             Intervalo listo: {store.avance_fecha_inicio} → {store.avance_fecha_fin}
           </div>
+        )}
+
+        {resultadoAvance && (
+          <p className="text-xs text-muted-foreground">
+            {resultadoAvance.totalCortes === 0
+              ? 'No hay cortes en el rango seleccionado.'
+              : `${resultadoAvance.actualizados} actualizados · ${resultadoAvance.yaConfirmados} ya confirmados · ${resultadoAvance.totalCortes} cortes en el rango.`}
+          </p>
         )}
 
         {avanceError && <p className="text-sm text-red-500">{avanceError}</p>}

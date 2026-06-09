@@ -1,6 +1,15 @@
 // Auto-generated from Libro1.xlsx — DO NOT EDIT MANUALLY
+import type { Poligono, ActividadCatalogo, DetalleCatalogo } from '@/types'
 
-export const POLIGONOS = [
+// es_corte = true when the detalle name contains "corte" (case-insensitive).
+// This is the single source of truth — DETALLES below derives its flag from it.
+export function esCorteDetalle(nombre: string): boolean {
+  return nombre.toLowerCase().includes('corte')
+}
+
+// Catalog ids are defined here (not auto-assigned by Supabase) so the offline
+// fallback, the Supabase seed and the synced reportes all reference the SAME id.
+const POLIGONOS_RAW: Omit<Poligono, 'id'>[] = [
   { codigo: 'RECB0081', nombre: 'Arborizadora Alta' },
   { codigo: 'RECB0161', nombre: 'Arborizadora Alta' },
   { codigo: 'RECB0194', nombre: 'Cerro Seco (SIMA)' },
@@ -26,62 +35,67 @@ export const POLIGONOS = [
   { codigo: 'RECB0317', nombre: 'La Regadera (Ciudad Bolivar)' },
   { codigo: 'RESF0323', nombre: 'La Calera Monserrate 1' },
   { codigo: 'REUQ0321', nombre: 'FA_La Serranía' },
-] as const
+]
 
-export const ACTIVIDADES = [
-  { nombre: '1. Plantación (Siembra)' },
-  { nombre: '2. Control Retamo liso' },
-  { nombre: '3. Control Chusque y helecho' },
-  { nombre: '4. Control Retamo espinoso' },
-  { nombre: '5. Control especies forestales exóticas' },
-  { nombre: '6. Instalación perchas para aves' },
-  { nombre: '7. Instalación cajas nido tipo balcón' },
-  { nombre: '8. Instalación refugios para reptiles y anfibios' },
-  { nombre: '9. Instalación refugios para murciélagos' },
-  { nombre: '10. Instalación madrigueras' },
-  { nombre: '11. Georreferenciación arreglos florísticos, Fauna' },
-  { nombre: '12. Georreferenciación de áreas de control' },
-  { nombre: '13. Ortofoto' },
-  { nombre: '14. Primer Mantenimiento' },
-  { nombre: '15. Reposición' },
-  { nombre: '16. Tutorado' },
-  { nombre: '17. Instalación Cercas' },
-  { nombre: '3. Control Chusque y helecho marranero' },
-  { nombre: '11. Georreferenciación de los arreglos florísticos' },
-  { nombre: '12. Georreferenciación áreas y control cambio cobertura' },
-  { nombre: '13. Toma de ortoimágenes antes y después' },
-  { nombre: '14. Mantenimiento individuo vegetal' },
-  { nombre: '15. Replante y enriquecimiento' },
-  { nombre: '17. Instalación o adecuación de cercas' },
-] as const
+const ACTIVIDADES_RAW: string[] = [
+  '1. Plantación (Siembra)',
+  '2. Control Retamo liso',
+  '3. Control Chusque y helecho',
+  '4. Control Retamo espinoso',
+  '5. Control especies forestales exóticas',
+  '6. Instalación perchas para aves',
+  '7. Instalación cajas nido tipo balcón',
+  '8. Instalación refugios para reptiles y anfibios',
+  '9. Instalación refugios para murciélagos',
+  '10. Instalación madrigueras',
+  '11. Georreferenciación arreglos florísticos, Fauna',
+  '12. Georreferenciación de áreas de control',
+  '13. Ortofoto',
+  '14. Primer Mantenimiento',
+  '15. Reposición',
+  '16. Tutorado',
+  '17. Instalación Cercas',
+  '3. Control Chusque y helecho marranero',
+  '11. Georreferenciación de los arreglos florísticos',
+  '12. Georreferenciación áreas y control cambio cobertura',
+  '13. Toma de ortoimágenes antes y después',
+  '14. Mantenimiento individuo vegetal',
+  '15. Replante y enriquecimiento',
+  '17. Instalación o adecuación de cercas',
+]
 
-// es_corte = true when detalle name contains corte (case-insensitive)
-export const DETALLES = [
-  { nombre: 'Cal.', es_corte: false },
-  { nombre: 'Hidroretenedor.', es_corte: false },
-  { nombre: 'Humus.', es_corte: false },
-  { nombre: 'Compost.', es_corte: false },
-  { nombre: 'Pino.', es_corte: false },
-  { nombre: 'Acacia.', es_corte: false },
-  { nombre: 'Eucalipto.', es_corte: false },
-  { nombre: 'Ahoyado.', es_corte: false },
-  { nombre: 'Llenado.', es_corte: false },
-  { nombre: 'Individuo plantado.', es_corte: false },
-  { nombre: 'Plateo.', es_corte: false },
-  { nombre: 'Fertilizacion.', es_corte: false },
-  { nombre: 'Fertiriego.', es_corte: false },
-  { nombre: 'Control Fitosanitario.', es_corte: false },
-  { nombre: 'Riego.', es_corte: false },
-  { nombre: 'Elaboracion de fajina', es_corte: false },
-  { nombre: 'Corte de flor del retamo', es_corte: true },
-  { nombre: 'Corte material somatico', es_corte: true },
-  { nombre: 'Destoconado', es_corte: false },
-  { nombre: 'Transporte para incineración', es_corte: false },
-  { nombre: 'Recolección de material cortado', es_corte: false },
-  { nombre: 'Triturado/chipeado y Empaque en globos', es_corte: false },
-  { nombre: 'Trazado de los diseños establecidos', es_corte: false },
-] as const
+const DETALLES_RAW: string[] = [
+  'Cal.',
+  'Hidroretenedor.',
+  'Humus.',
+  'Compost.',
+  'Pino.',
+  'Acacia.',
+  'Eucalipto.',
+  'Ahoyado.',
+  'Llenado.',
+  'Individuo plantado.',
+  'Plateo.',
+  'Fertilizacion.',
+  'Fertiriego.',
+  'Control Fitosanitario.',
+  'Riego.',
+  'Elaboracion de fajina',
+  'Corte de flor del retamo',
+  'Corte material somatico',
+  'Destoconado',
+  'Transporte para incineración',
+  'Recolección de material cortado',
+  'Triturado/chipeado y Empaque en globos',
+  'Trazado de los diseños establecidos',
+]
 
-export function esCorteDetalle(detNombre: string): boolean {
-  return detNombre.toLowerCase().includes('corte')
-}
+export const POLIGONOS: Poligono[] = POLIGONOS_RAW.map((p, i) => ({ id: i + 1, ...p }))
+
+export const ACTIVIDADES: ActividadCatalogo[] = ACTIVIDADES_RAW.map((nombre, i) => ({ id: i + 1, nombre }))
+
+export const DETALLES: DetalleCatalogo[] = DETALLES_RAW.map((nombre, i) => ({
+  id: i + 1,
+  nombre,
+  es_corte: esCorteDetalle(nombre),
+}))

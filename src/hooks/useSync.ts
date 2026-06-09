@@ -1,13 +1,17 @@
 'use client'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useOnlineStatus } from './useOnlineStatus'
-import { syncPendingReports } from '@/lib/sync'
+import { syncPendingReports, type SyncResult } from '@/lib/sync'
 
 export function useSync() {
   const isOnline = useOnlineStatus()
+  const [result, setResult] = useState<SyncResult | null>(null)
 
-  const sync = useCallback(() => {
-    if (isOnline) syncPendingReports().catch(console.error)
+  const sync = useCallback(async () => {
+    if (!isOnline) return
+    const r = await syncPendingReports()
+    setResult(r)
+    return r
   }, [isOnline])
 
   useEffect(() => { if (isOnline) sync() }, [isOnline, sync])
@@ -17,5 +21,5 @@ export function useSync() {
     return () => window.removeEventListener('focus', sync)
   }, [sync])
 
-  return { isOnline, sync }
+  return { isOnline, sync, result }
 }

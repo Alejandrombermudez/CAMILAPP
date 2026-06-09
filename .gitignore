@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Excel temp files
 ~$*.xlsx
+
+# Claude Code dev tool
+.claude/

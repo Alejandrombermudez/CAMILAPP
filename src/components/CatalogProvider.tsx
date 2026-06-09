@@ -1,7 +1,7 @@
 'use client'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { db, seedCatalogIfEmpty } from '@/lib/local-db'
+import { db, seedCatalogIfEmpty, refreshCatalogFromServer } from '@/lib/local-db'
 import { POLIGONOS, ACTIVIDADES, DETALLES } from '@/lib/catalog-data'
 import type { Poligono, ActividadCatalogo, DetalleCatalogo } from '@/types'
 
@@ -38,12 +38,13 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         sbDets   = (rD.data ?? []) as DetalleCatalogo[]
       } catch { /* offline */ }
 
-      // Fallback data with synthetic ids
-      const fbPoligs = POLIGONOS.map((p, i) => ({ id: i + 1, ...p })) as Poligono[]
-      const fbActs   = ACTIVIDADES.map((a, i) => ({ id: i + 1, nombre: a.nombre })) as ActividadCatalogo[]
-      const fbDets   = DETALLES.map((d, i) => ({ id: i + 1, nombre: d.nombre, es_corte: d.es_corte })) as DetalleCatalogo[]
-
-      await seedCatalogIfEmpty(sbPoligs, sbActs, sbDets, fbPoligs, fbActs, fbDets)
+      if (sbPoligs.length || sbActs.length || sbDets.length) {
+        // Online: refresh local catalog from Supabase (stable ids → safe upsert).
+        await refreshCatalogFromServer(sbPoligs, sbActs, sbDets)
+      } else {
+        // Offline / empty server: seed bundled fallback the first time only.
+        await seedCatalogIfEmpty(POLIGONOS, ACTIVIDADES, DETALLES)
+      }
 
       const [poligs, acts, dets] = await Promise.all([
         db.poligonos.toArray(),

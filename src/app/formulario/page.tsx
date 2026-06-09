@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useFormStore } from '@/hooks/useFormStore'
@@ -21,8 +21,15 @@ const TAB_LABELS: Record<Tab, string> = {
 
 export default function FormularioPage() {
   const [activeTab, setActiveTab] = useState<Tab>('hoja1')
+  const [hydrated, setHydrated] = useState(false)
   const store = useFormStore()
   const router = useRouter()
+
+  // Load any saved draft from localStorage after mount (store uses skipHydration).
+  // Gate the steps on this so react-hook-form in Hoja1 mounts with the draft values.
+  useEffect(() => {
+    Promise.resolve(useFormStore.persist.rehydrate()).then(() => setHydrated(true))
+  }, [])
 
   const goTo = (tab: Tab) => setActiveTab(tab)
   const next = () => {
@@ -37,13 +44,15 @@ export default function FormularioPage() {
   const handleSubmit = async () => {
     const local_id = crypto.randomUUID()
 
-    // Build actividades + detalles records
+    // Build actividades + detalles records, tracking the generated ids by tempId
     const actividades: Omit<ActividadReporte, 'reporte_id'>[] = []
     const detalles: DetalleActividadReporte[] = []
+    const actIdByTempId = new Map<string, string>()
+    const detIdByTempId = new Map<string, string>()
 
-    for (let i = 0; i < store.actividadGrupos.length; i++) {
-      const grupo = store.actividadGrupos[i]
+    store.actividadGrupos.forEach((grupo, i) => {
       const actId = crypto.randomUUID()
+      actIdByTempId.set(grupo.tempId, actId)
       const actNombre = grupo.esOtra ? (grupo.customNombre || 'Otra') : grupo.actividadNombre
 
       actividades.push({
@@ -53,45 +62,30 @@ export default function FormularioPage() {
         orden: i,
       })
 
-      for (let j = 0; j < grupo.detalles.length; j++) {
-        const det = grupo.detalles[j]
+      grupo.detalles.forEach((det, j) => {
+        const detId = crypto.randomUUID()
+        detIdByTempId.set(det.tempId, detId)
         const detNombre = det.esOtro ? (det.customNombre || 'Otro') : det.detalleNombre
         detalles.push({
-          id: crypto.randomUUID(),
+          id: detId,
           actividad_reporte_id: actId,
           detalle_nombre: detNombre,
           es_otro: det.esOtro,
           es_corte: esCorteDetalle(detNombre),
           orden: j,
         })
-      }
-    }
-
-    // Build rendimiento records — match by tempId
-    const rendimientos: Omit<Rendimiento, 'reporte_id' | 'created_at'>[] = store.rendimientoFilas.map(fila => {
-      // Find matching actividad and detalle record ids
-      const actIdx = store.actividadGrupos.findIndex(g => g.tempId === fila.actividadGrupoTempId)
-      const actId  = actIdx >= 0 ? actividades[actIdx].id : ''
-
-      const grupo = store.actividadGrupos[actIdx]
-      const detIdx = grupo?.detalles.findIndex(d => d.tempId === fila.detalleTempId) ?? -1
-      // Find the detalles record that corresponds
-      const detRecord = detalles.find(
-        d => d.actividad_reporte_id === actId && detalles.indexOf(d) ===
-          (detalles.filter(dd => dd.actividad_reporte_id === actId).indexOf(
-            detalles.filter(dd => dd.actividad_reporte_id === actId)[detIdx]
-          ))
-      )
-
-      return {
-        id: crypto.randomUUID(),
-        actividad_reporte_id: actId,
-        detalle_reporte_id: detRecord?.id ?? '',
-        cantidad_ejecutada: fila.cantidadEjecutada ?? 0,
-        num_operarios: fila.numOperarios ?? 1,
-        porcentaje_area_efectiva: fila.porcentajeAreaEfectiva,
-      }
+      })
     })
+
+    // Build rendimiento records — resolve record ids directly via the tempId maps
+    const rendimientos: Omit<Rendimiento, 'reporte_id' | 'created_at'>[] = store.rendimientoFilas.map(fila => ({
+      id: crypto.randomUUID(),
+      actividad_reporte_id: actIdByTempId.get(fila.actividadGrupoTempId) ?? '',
+      detalle_reporte_id: detIdByTempId.get(fila.detalleTempId) ?? '',
+      cantidad_ejecutada: fila.cantidadEjecutada ?? 0,
+      num_operarios: fila.numOperarios ?? 1,
+      porcentaje_area_efectiva: fila.porcentajeAreaEfectiva,
+    }))
 
     // Build avance efectivo record
     const avances: Omit<AvanceEfectivo, 'reporte_id' | 'created_at'>[] = []
@@ -152,9 +146,15 @@ export default function FormularioPage() {
 
       {/* Form steps */}
       <div className="min-h-[400px]">
-        {activeTab === 'hoja1' && <Hoja1 onNext={next} />}
-        {activeTab === 'hoja2' && <Hoja2 onNext={next} onPrev={prev} />}
-        {activeTab === 'hoja3' && <Hoja3 onPrev={prev} onSubmit={handleSubmit} />}
+        {!hydrated ? (
+          <p className="text-sm text-muted-foreground text-center py-12">Cargando borrador…</p>
+        ) : (
+          <>
+            {activeTab === 'hoja1' && <Hoja1 onNext={next} />}
+            {activeTab === 'hoja2' && <Hoja2 onNext={next} onPrev={prev} />}
+            {activeTab === 'hoja3' && <Hoja3 onPrev={prev} onSubmit={handleSubmit} />}
+          </>
+        )}
       </div>
     </div>
   )

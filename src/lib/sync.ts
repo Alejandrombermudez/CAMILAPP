@@ -1,17 +1,31 @@
 import { db } from './local-db'
+import { getSyncSecret } from './sync-auth'
 import type {
   Reporte, ActividadReporte, DetalleActividadReporte,
   Rendimiento, AvanceEfectivo,
 } from '@/types'
 
+export type SyncResult =
+  | { status: 'idle' }          // nada que sincronizar / ya hay un sync en curso
+  | { status: 'offline' }
+  | { status: 'no-secret' }     // falta configurar la clave de sincronización
+  | { status: 'auth-failed' }   // el servidor rechazó la clave (401)
+  | { status: 'error' }
+  | { status: 'ok'; synced: number }
+
 let isSyncing = false
 
-export async function syncPendingReports(): Promise<void> {
-  if (isSyncing || typeof navigator === 'undefined' || !navigator.onLine) return
+export async function syncPendingReports(): Promise<SyncResult> {
+  if (isSyncing) return { status: 'idle' }
+  if (typeof navigator === 'undefined' || !navigator.onLine) return { status: 'offline' }
+
+  const secret = getSyncSecret()
+  if (!secret) return { status: 'no-secret' }
+
   isSyncing = true
   try {
     const pending = await db.reportes.where('sync_status').equals('pending').toArray()
-    if (pending.length === 0) return
+    if (pending.length === 0) return { status: 'idle' }
 
     const reporteIds = pending.map(r => r.id)
 
@@ -26,7 +40,7 @@ export async function syncPendingReports(): Promise<void> {
 
     const res = await fetch('/api/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-sync-secret': secret },
       body: JSON.stringify({
         reportes: pending,
         actividades: actividadesAll,
@@ -36,9 +50,13 @@ export async function syncPendingReports(): Promise<void> {
       }),
     })
 
-    if (res.ok) {
-      await db.reportes.where('id').anyOf(reporteIds).modify({ sync_status: 'synced' })
-    }
+    if (res.status === 401) return { status: 'auth-failed' }
+    if (!res.ok) return { status: 'error' }
+
+    await db.reportes.where('id').anyOf(reporteIds).modify({ sync_status: 'synced' })
+    return { status: 'ok', synced: pending.length }
+  } catch {
+    return { status: 'error' }
   } finally {
     isSyncing = false
   }
@@ -110,22 +128,4 @@ export async function saveReporte(input: SaveReporteInput): Promise<string> {
 
   syncPendingReports().catch(console.error)
   return id
-}
-
-export async function bulkUpdatePorcentaje(
-  fechaInicio: string,
-  fechaFin: string,
-  porcentaje: number,
-): Promise<void> {
-  const reportesEnRango = await db.reportes
-    .where('fecha').between(fechaInicio, fechaFin, true, true)
-    .toArray()
-
-  if (reportesEnRango.length === 0) return
-  const reporteIds = reportesEnRango.map(r => r.id)
-
-  await db.rendimiento
-    .where('reporte_id').anyOf(reporteIds)
-    .filter(r => r.porcentaje_area_efectiva === null)
-    .modify({ porcentaje_area_efectiva: porcentaje })
 }

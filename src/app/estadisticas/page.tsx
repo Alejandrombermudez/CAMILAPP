@@ -9,6 +9,8 @@ import { AlertTriangle, BarChart3, RefreshCw } from 'lucide-react'
 import { format, subDays } from 'date-fns'
 import type { Reporte, Rendimiento, ActividadReporte, DetalleActividadReporte } from '@/types'
 import { useCatalog } from '@/components/CatalogProvider'
+import { estadoCorte } from '@/lib/avance'
+import { EstadoCorteBadge } from '@/components/EstadoCorteBadge'
 
 interface RendimientoRow {
   poligonoCodigo: string
@@ -117,6 +119,11 @@ export default function EstadisticasPage() {
     grouped[polyKey][actKey].push(row)
   }
 
+  // Traffic-light summary for corte rows
+  const cortes = rows.filter(r => r.esCorte)
+  const cortesConfirmados = cortes.filter(r => r.porcentajePromedio !== null).length
+  const cortesPendientes = cortes.length - cortesConfirmados
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -146,6 +153,21 @@ export default function EstadisticasPage() {
           Calcular
         </Button>
       </div>
+
+      {/* Semáforo resumen de cortes */}
+      {cortes.length > 0 && (
+        <div className="flex items-center gap-4 text-sm border rounded-lg px-4 py-2.5 bg-gray-50/50">
+          <span className="font-medium text-gray-700">% Área Efectiva:</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden />
+            {cortesConfirmados} confirmados
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" aria-hidden />
+            {cortesPendientes} pendientes
+          </span>
+        </div>
+      )}
 
       {/* Alerta de fechas sin % área efectiva */}
       {fechasSinPct.length > 0 && (
@@ -207,12 +229,14 @@ export default function EstadisticasPage() {
                           <td className="px-4 py-2 text-right tabular-nums">{row.cantidadTotal}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{row.operariosTotal}</td>
                           <td className="px-4 py-2 text-right tabular-nums">
-                            {row.esCorte
-                              ? row.porcentajePromedio !== null
-                                ? `${row.porcentajePromedio}%`
-                                : <span className="text-yellow-600">100%*</span>
-                              : '—'
-                            }
+                            {row.esCorte ? (
+                              <span className="inline-flex items-center justify-end gap-1.5">
+                                <EstadoCorteBadge estado={estadoCorte(true, row.porcentajePromedio)} showLabel={false} />
+                                {row.porcentajePromedio !== null
+                                  ? `${row.porcentajePromedio}%`
+                                  : <span className="text-amber-600">100%*</span>}
+                              </span>
+                            ) : '—'}
                           </td>
                           <td className="px-4 py-2 text-right tabular-nums font-semibold text-green-700">
                             {row.rendimientoEfectivo} u/op/h
