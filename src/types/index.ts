@@ -72,6 +72,58 @@ export interface AvanceEfectivo {
   created_at: string
 }
 
+// ── Mapa / Georreferenciación ─────────────────────────────────
+export type OrigenGeo = 'gps' | 'import' | 'manual'
+
+export type PuntoTipo =
+  | 'individuo'    // individuo vegetal plantado
+  | 'percha'       // percha para aves
+  | 'nido'         // caja nido
+  | 'refugio'      // refugio reptiles / anfibios / murciélagos
+  | 'madriguera'
+  | 'muestreo'
+  | 'otro'
+
+export interface LatLng {
+  lat: number
+  lng: number
+}
+
+// Punto georreferenciado individual (marcador). Igual que los reportes: vive en
+// IndexedDB y sube por sync; no se lee de Supabase con la anon key.
+export interface Punto {
+  id: string
+  poligono_id: number | null
+  reporte_id: string | null     // informe donde se capturó (opcional)
+  nombre: string
+  tipo: PuntoTipo
+  lat: number
+  lng: number
+  altitud: number | null        // m
+  precision: number | null      // m (exactitud reportada por el GPS)
+  notas: string | null
+  origen: OrigenGeo
+  sync_status: SyncStatus
+  local_id: string
+  created_at: string
+}
+
+// Núcleo de restauración: área/agrupación. `vertices` con 1 punto = marcador,
+// con ≥3 = polígono (p. ej. importado de un shapefile/KML).
+export interface Nucleo {
+  id: string
+  poligono_id: number | null
+  nombre: string
+  descripcion: string | null
+  vertices: LatLng[]
+  radio: number | null          // m (opcional, para dibujar como círculo)
+  notas: string | null
+  origen: OrigenGeo
+  sync_status: SyncStatus
+  local_id: string
+  created_at: string
+}
+
 // ── Form-level types (used in Zustand store + components) ─────
 export interface DetalleSeleccionado {
   tempId: string

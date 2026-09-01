@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { ChevronLeft, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { unidadSubactividad } from '@/lib/catalog-data'
 import type { RendimientoFila } from '@/types'
 
 // ── Operator distribution logic ────────────────────────────────
@@ -180,6 +181,7 @@ export default function Hoja3({
             {filas.map((fila, idx) => {
               const maxOps = getMaxOperarios(filas, idx, totalOps)
               const opOptions = Array.from({ length: maxOps }, (_, i) => i + 1)
+              const unidad = unidadSubactividad(fila.detalleNombre)
               const rendimiento = fila.cantidadEjecutada !== null && fila.numOperarios
                 ? (fila.cantidadEjecutada / fila.numOperarios / 8).toFixed(3)
                 : '—'
@@ -206,7 +208,7 @@ export default function Hoja3({
                   <div className="grid grid-cols-2 gap-3">
                     {/* Cantidad ejecutada */}
                     <div className="space-y-1">
-                      <Label className="text-xs">Cantidad ejecutada</Label>
+                      <Label className="text-xs">Cantidad ejecutada ({unidad})</Label>
                       <Input
                         type="number"
                         min={0}

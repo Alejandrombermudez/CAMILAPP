@@ -90,6 +90,78 @@ const DETALLES_RAW: string[] = [
   'Trazado de los diseños establecidos',
 ]
 
+// ── Subactividades permitidas por actividad ───────────────────
+// Clasificación aportada por la profesional de campo (Excel, ago-2026).
+// La clave es el NÚMERO de la actividad (1–17), por lo que aplica por igual
+// a las dos variantes de nombre que comparten número en el catálogo.
+// Una actividad SIN entrada aquí no está clasificada → se muestran todas las
+// subactividades (fallback no bloqueante).
+const SUBACTIVIDADES_POR_ACTIVIDAD: Record<number, string[]> = {
+  1: ['Cal.', 'Hidroretenedor.', 'Humus.', 'Ahoyado.', 'Llenado.', 'Individuo plantado.', 'Riego.', 'Trazado de los diseños establecidos'],
+  2: ['Corte de flor del retamo', 'Corte material somatico', 'Destoconado', 'Transporte para incineración', 'Recolección de material cortado', 'Triturado/chipeado y Empaque en globos'],
+  3: ['Elaboracion de fajina', 'Corte material somatico', 'Destoconado', 'Recolección de material cortado'],
+  4: ['Corte de flor del retamo', 'Corte material somatico', 'Destoconado', 'Transporte para incineración', 'Recolección de material cortado', 'Triturado/chipeado y Empaque en globos'],
+  5: ['Pino.', 'Acacia.', 'Eucalipto.', 'Elaboracion de fajina'],
+  14: ['Plateo.', 'Fertilizacion.', 'Fertiriego.', 'Control Fitosanitario.', 'Riego.'],
+}
+
+// Extrae el número inicial del nombre de la actividad ("14. Primer Mantenimiento" → 14).
+export function actividadNumero(nombre: string): number | null {
+  const m = nombre.match(/^\s*(\d+)\s*\./)
+  return m ? parseInt(m[1], 10) : null
+}
+
+// Devuelve la lista de subactividades permitidas para una actividad, o `null`
+// si la actividad no está clasificada (el llamador debe mostrar todas).
+export function subactividadesPermitidas(actividadNombre: string): string[] | null {
+  const num = actividadNumero(actividadNombre)
+  if (num === null) return null
+  return SUBACTIVIDADES_POR_ACTIVIDAD[num] ?? null
+}
+
+// ── Unidad de medida por subactividad ─────────────────────────
+// 'm²' para las que miden área; 'unidad' para conteo de elementos discretos.
+// Por defecto (subactividad "Otro"/personalizada): corte → m², resto → unidad.
+// Ajustable aquí si alguna va distinto (revisar con la profesional).
+export type Unidad = 'm²' | 'unidad'
+
+const UNIDAD_POR_SUBACTIVIDAD: Record<string, Unidad> = {
+  'Cal.': 'unidad',
+  'Hidroretenedor.': 'unidad',
+  'Humus.': 'unidad',
+  'Compost.': 'unidad',
+  'Pino.': 'unidad',
+  'Acacia.': 'unidad',
+  'Eucalipto.': 'unidad',
+  'Ahoyado.': 'unidad',
+  'Llenado.': 'unidad',
+  'Individuo plantado.': 'unidad',
+  'Plateo.': 'unidad',
+  'Fertilizacion.': 'unidad',
+  'Fertiriego.': 'unidad',
+  'Control Fitosanitario.': 'unidad',
+  'Riego.': 'unidad',
+  'Elaboracion de fajina': 'm²',
+  'Corte de flor del retamo': 'm²',
+  'Corte material somatico': 'm²',
+  'Destoconado': 'unidad',
+  'Transporte para incineración': 'unidad',
+  'Recolección de material cortado': 'm²',
+  'Triturado/chipeado y Empaque en globos': 'unidad',
+  'Trazado de los diseños establecidos': 'm²',
+}
+
+export function unidadSubactividad(nombre: string): Unidad {
+  return UNIDAD_POR_SUBACTIVIDAD[nombre] ?? (esCorteDetalle(nombre) ? 'm²' : 'unidad')
+}
+
+// Etiqueta legible: "m²" o "unidad"/"unidades" según cantidad.
+export function formatUnidad(nombre: string, cantidad: number): string {
+  const u = unidadSubactividad(nombre)
+  if (u === 'm²') return 'm²'
+  return cantidad === 1 ? 'unidad' : 'unidades'
+}
+
 export const POLIGONOS: Poligono[] = POLIGONOS_RAW.map((p, i) => ({ id: i + 1, ...p }))
 
 export const ACTIVIDADES: ActividadCatalogo[] = ACTIVIDADES_RAW.map((nombre, i) => ({ id: i + 1, nombre }))

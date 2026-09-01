@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import type {
   Poligono, ActividadCatalogo, DetalleCatalogo,
   Reporte, ActividadReporte, DetalleActividadReporte,
-  Rendimiento, AvanceEfectivo,
+  Rendimiento, AvanceEfectivo, Punto, Nucleo,
 } from '@/types'
 
 export class CamilappDB extends Dexie {
@@ -14,6 +14,8 @@ export class CamilappDB extends Dexie {
   detalles_actividad!:    Table<DetalleActividadReporte>
   rendimiento!:           Table<Rendimiento>
   avance_efectivo!:       Table<AvanceEfectivo>
+  puntos!:                Table<Punto>
+  nucleos!:               Table<Nucleo>
 
   constructor() {
     super('camilapp')
@@ -26,6 +28,11 @@ export class CamilappDB extends Dexie {
       detalles_actividad:   'id, actividad_reporte_id',
       rendimiento:          'id, reporte_id, actividad_reporte_id',
       avance_efectivo:      'id, reporte_id, fecha_inicio, fecha_fin',
+    })
+    // v2 — georreferenciación (mapa): puntos y núcleos. Local-first como reportes.
+    this.version(2).stores({
+      puntos:  'id, poligono_id, reporte_id, tipo, sync_status, local_id',
+      nucleos: 'id, poligono_id, sync_status, local_id',
     })
   }
 }

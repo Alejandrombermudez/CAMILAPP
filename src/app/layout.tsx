@@ -5,7 +5,7 @@ import { CatalogProvider } from '@/components/CatalogProvider'
 import { SyncStatus } from '@/components/SyncStatus'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { BarChart3, FileText } from 'lucide-react'
+import { BarChart3, FileText, ClipboardList, CalendarDays, Map } from 'lucide-react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -39,6 +39,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   >
                     <FileText size={14} />
                     <span className="hidden sm:inline">Formulario</span>
+                  </Link>
+                  <Link
+                    href="/rendimiento"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm hover:bg-green-50 hover:text-green-700 transition-colors"
+                  >
+                    <CalendarDays size={14} />
+                    <span className="hidden sm:inline">Rendimiento</span>
+                  </Link>
+                  <Link
+                    href="/mis-formularios"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm hover:bg-green-50 hover:text-green-700 transition-colors"
+                  >
+                    <ClipboardList size={14} />
+                    <span className="hidden sm:inline">Mis formularios</span>
+                  </Link>
+                  <Link
+                    href="/mapa"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm hover:bg-green-50 hover:text-green-700 transition-colors"
+                  >
+                    <Map size={14} />
+                    <span className="hidden sm:inline">Mapa</span>
                   </Link>
                   <Link
                     href="/estadisticas"

@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
-import { esCorteDetalle } from '@/lib/catalog-data'
+import { esCorteDetalle, subactividadesPermitidas } from '@/lib/catalog-data'
 import type { ActividadGrupo, DetalleSeleccionado } from '@/types'
 
 export default function Hoja2({
@@ -120,9 +120,15 @@ export default function Hoja2({
       {store.actividadGrupos.map((grupo, idx) => {
         const actNombre = grupo.esOtra ? grupo.customNombre : grupo.actividadNombre
         const selectedDets = grupo.detalles.map(d => d.detalleNombre)
+        // Filtra las subactividades según la actividad elegida. Si la actividad no
+        // está clasificada, `permitidas` es null → se muestran todas (fallback).
+        const permitidas = grupo.esOtra ? null : subactividadesPermitidas(grupo.actividadNombre)
+        const detBase = permitidas
+          ? detOptions.filter(o => permitidas.includes(o.value))
+          : detOptions
         const availableDets = grupo.esOtra
           ? [] // Otra actividad → solo "Otro" detalle
-          : detOptions.filter(o => !selectedDets.includes(o.value))
+          : detBase.filter(o => !selectedDets.includes(o.value))
 
         return (
           <div key={grupo.tempId} className="border rounded-lg p-4 space-y-4 bg-white shadow-sm">
@@ -304,7 +310,7 @@ export default function Hoja2({
           <ChevronLeft size={16} className="mr-1" /> Anterior
         </Button>
         <Button type="button" onClick={handleNext} className="flex-1 bg-green-600 hover:bg-green-700">
-          Siguiente <ChevronRight size={16} className="ml-1" />
+          Guardar informe <ChevronRight size={16} className="ml-1" />
         </Button>
       </div>
     </div>
