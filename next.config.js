@@ -1,18 +1,21 @@
 /** @type {import('next').NextConfig} */
+const withPWAInit = require('@ducanh2912/next-pwa').default
 
-// Parte del runtime caching POR DEFECTO de next-pwa. Cubre lo esencial para que la
-// app funcione sin conexión: documentos/navegación de páginas ('others'), chunks JS
-// y CSS, /_next/data, imágenes, fuentes, etc. Antes había un runtimeCaching custom
-// que SOLO cacheaba /_next/static y Supabase, y al reemplazar los defaults se perdía
-// el cacheo de las páginas → la app no cargaba offline.
-const defaultCache = require('next-pwa/cache')
-const runtimeCaching = [...defaultCache]
+// Revisión que cambia en cada build/deploy → invalida el precache de las páginas
+// cuando cambia el contenido. En Vercel usa el SHA del commit; en local, timestamp.
+const REVISION = process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now())
 
-// Regla específica de Supabase (NetworkFirst) construida desde la env var, para que
-// el catálogo quede cacheado y disponible offline, y siga funcionando si cambia la URL.
+// Precachea los DOCUMENTOS de las rutas estáticas para que la app cargue offline
+// desde el primer arranque (sin depender de haber visitado cada pantalla online).
+// Las rutas dinámicas (p. ej. /mis-formularios/[id]) caen al fallback offline.
+const rutasEstaticas = ['/formulario', '/rendimiento', '/mapa', '/mis-formularios', '/estadisticas']
+const additionalManifestEntries = rutasEstaticas.map((url) => ({ url, revision: REVISION }))
+
+// Regla específica de Supabase (NetworkFirst) para cachear el catálogo offline.
+const runtimeCaching = []
 try {
   const supabaseHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).host
-  runtimeCaching.unshift({
+  runtimeCaching.push({
     urlPattern: new RegExp('^https://' + supabaseHost.replace(/\./g, '\\.') + '/.*', 'i'),
     handler: 'NetworkFirst',
     options: {
@@ -24,17 +27,23 @@ try {
   // NEXT_PUBLIC_SUPABASE_URL ausente o inválida — se omite la regla de Supabase.
 }
 
-const withPWA = require('next-pwa')({
+const withPWA = withPWAInit({
   dest: 'public',
-  register: true,
-  skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
-  // Cachea las páginas al navegar por el menú (estando online) para que queden
-  // disponibles offline aunque no se hayan abierto con recarga completa.
+  register: true,
+  reloadOnOnline: true,
+  // Cachea las pantallas al navegar por el menú (online) → disponibles offline.
   cacheOnFrontEndNav: true,
-  runtimeCaching,
+  aggressiveFrontEndNavCaching: true,
+  // Muestra una página offline propia cuando una navegación no está en caché
+  // (en vez del error "sin conexión" del navegador).
+  fallbacks: { document: '/offline' },
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    disableDevLogs: true,
+    runtimeCaching,
+    additionalManifestEntries,
+  },
 })
 
-const nextConfig = {}
-
-module.exports = withPWA(nextConfig)
+module.exports = withPWA({})
