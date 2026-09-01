@@ -113,6 +113,39 @@ export async function getEstadoDias(): Promise<{ fecha: string; estado: EstadoDi
   return out
 }
 
+// Estado de cortes por día — para el modo "Avance efectivo" del calendario.
+// Solo aparecen las fechas que tienen ≥1 rendimiento de corte (aplicables). El
+// resto de días quedan bloqueados (no se les puede aplicar %). `confirmados` > 0
+// marca conflicto (ya tienen % puesto).
+export interface EstadoCortesDia {
+  fecha: string
+  confirmados: number   // cortes con % ya puesto
+  pendientes: number    // cortes con % en null
+}
+
+export async function getEstadoCortesDias(): Promise<EstadoCortesDia[]> {
+  const reportes = await db.reportes.toArray()
+  if (!reportes.length) return []
+  const fechaById = new Map(reportes.map(r => [r.id, r.fecha]))
+  const rendimientos = await db.rendimiento.where('reporte_id').anyOf(reportes.map(r => r.id)).toArray()
+
+  const detIds = Array.from(new Set(rendimientos.map(r => r.detalle_reporte_id).filter(Boolean)))
+  const detalles = await db.detalles_actividad.where('id').anyOf(detIds).toArray()
+  const corteDetIds = new Set(detalles.filter(d => d.es_corte).map(d => d.id))
+
+  const byFecha = new Map<string, { confirmados: number; pendientes: number }>()
+  for (const r of rendimientos) {
+    if (!corteDetIds.has(r.detalle_reporte_id)) continue
+    const fecha = fechaById.get(r.reporte_id)
+    if (!fecha) continue
+    const cur = byFecha.get(fecha) ?? { confirmados: 0, pendientes: 0 }
+    if (r.porcentaje_area_efectiva !== null) cur.confirmados++
+    else cur.pendientes++
+    byFecha.set(fecha, cur)
+  }
+  return Array.from(byFecha.entries()).map(([fecha, v]) => ({ fecha, ...v }))
+}
+
 // ── Guardar / editar el rendimiento de un informe ya existente ──
 // El rendimiento se captura DESPUÉS de crear el informe (sección Rendimiento por
 // día). Mantiene el id de cada fila estable (update in-place) para que el upsert

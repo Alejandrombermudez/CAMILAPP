@@ -5,15 +5,16 @@ import { DayPicker } from 'react-day-picker'
 import { format, parseISO, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { CalendarDays, MapPin, Users, Clock, Pencil, Save, X } from 'lucide-react'
+import { CalendarDays, MapPin, Users, Clock, Pencil, Save, X, Percent, AlertTriangle } from 'lucide-react'
 import 'react-day-picker/style.css'
 import {
-  getReportesPorFecha, getEstadoDias, guardarRendimientoReporte,
+  getReportesPorFecha, getEstadoDias, getEstadoCortesDias, guardarRendimientoReporte,
   type ReporteDetalle, type FilaRendimientoInput,
 } from '@/lib/reportes'
+import { estadoCorte, aplicarAvanceEfectivoFechas } from '@/lib/avance'
 import { unidadSubactividad, formatUnidad } from '@/lib/catalog-data'
-import { estadoCorte } from '@/lib/avance'
 import { EstadoCorteBadge } from '@/components/EstadoCorteBadge'
+import { CalendarPicker } from '@/components/CalendarPicker'
 import { useCatalog } from '@/components/CatalogProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,8 +28,42 @@ function fmt24to12(t: string) {
 }
 const nf = new Intl.NumberFormat('es-CO')
 
+type Modo = 'dia' | 'avance'
+
 export default function RendimientoPage() {
   const { poligonos } = useCatalog()
+  const [modo, setModo] = useState<Modo>('dia')
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <CalendarDays size={20} className="text-green-700" />
+        <h1 className="text-xl font-bold text-green-800">Rendimiento</h1>
+      </div>
+
+      {/* Toggle de modo */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+        {([['dia', 'Por día'], ['avance', 'Avance efectivo (%)']] as [Modo, string][]).map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setModo(m)}
+            className={`flex-1 rounded-md py-1.5 text-sm transition-colors ${
+              modo === m ? 'bg-white shadow-sm font-medium text-green-800' : 'text-muted-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {modo === 'dia' ? <ModoDia poligonos={poligonos} /> : <ModoAvance />}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════ MODO POR DÍA ═════════
+function ModoDia({ poligonos }: { poligonos: { id: number; codigo: string; nombre: string }[] }) {
   const [fecha, setFecha] = useState<string | null>(null)
   useEffect(() => { setFecha(format(new Date(), 'yyyy-MM-dd')) }, [])
 
@@ -41,10 +76,8 @@ export default function RendimientoPage() {
   const { diasVerde, diasAzul, diasConReporte } = useMemo(() => {
     const verde: Date[] = [], azul: Date[] = [], todos: Date[] = []
     for (const d of estadoDias ?? []) {
-      const day = parseISO(d.fecha)
-      todos.push(day)
-      if (d.estado === 'con-rendimiento') verde.push(day)
-      else azul.push(day)
+      const day = parseISO(d.fecha); todos.push(day)
+      if (d.estado === 'con-rendimiento') verde.push(day); else azul.push(day)
     }
     return { diasVerde: verde, diasAzul: azul, diasConReporte: todos }
   }, [estadoDias])
@@ -53,12 +86,6 @@ export default function RendimientoPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <CalendarDays size={20} className="text-green-700" />
-        <h1 className="text-xl font-bold text-green-800">Rendimiento</h1>
-      </div>
-
-      {/* Calendario */}
       <div className="border rounded-lg p-2 bg-white shadow-sm flex justify-center">
         <DayPicker
           mode="single"
@@ -75,13 +102,11 @@ export default function RendimientoPage() {
           }}
         />
       </div>
-
-      {/* Leyenda */}
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
-        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded-sm bg-green-600 inline-block" /> Con rendimiento</span>
-        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded-sm bg-blue-600 inline-block" /> Falta rendimiento</span>
-        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded-sm bg-gray-200 inline-block" /> Sin informe (bloqueado)</span>
-      </div>
+      <Leyenda items={[
+        ['bg-green-600', 'Con rendimiento'],
+        ['bg-blue-600', 'Falta rendimiento'],
+        ['bg-gray-200', 'Sin informe (bloqueado)'],
+      ]} />
 
       {fecha && (
         <p className="text-sm font-medium text-green-800 first-letter:uppercase">
@@ -97,15 +122,147 @@ export default function RendimientoPage() {
         </p>
       ) : (
         <div className="space-y-8">
-          {informes.map(inf => (
-            <RendimientoDia key={inf.reporte.id} inf={inf} poligonos={poligonos} />
-          ))}
+          {informes.map(inf => <RendimientoDia key={inf.reporte.id} inf={inf} poligonos={poligonos} />)}
         </div>
       )}
     </div>
   )
 }
 
+// ══════════════════════════════════════ MODO AVANCE EFECTIVO ═══════
+function ModoAvance() {
+  const estadoCortes = useLiveQuery(() => getEstadoCortesDias(), [])
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [desde, setDesde] = useState<string | null>(null)
+  const [hasta, setHasta] = useState<string | null>(null)
+  const [pct, setPct] = useState('')
+  const [sobrescribir, setSobrescribir] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
+
+  const { aplicableDates, conflictoDates, conflictoSet } = useMemo(() => {
+    const apt: Date[] = [], conf: Date[] = [], cset = new Set<string>()
+    for (const d of estadoCortes ?? []) {
+      apt.push(parseISO(d.fecha))
+      if (d.confirmados > 0) { conf.push(parseISO(d.fecha)); cset.add(d.fecha) }
+    }
+    return { aplicableDates: apt, conflictoDates: conf, conflictoSet: cset }
+  }, [estadoCortes])
+
+  // Al fijar un intervalo, autoselecciona los días aplicables (con cortes) del rango.
+  useEffect(() => {
+    if (!desde || !hasta) return
+    const inRange = (estadoCortes ?? []).filter(d => d.fecha >= desde && d.fecha <= hasta).map(d => d.fecha)
+    setSeleccion(new Set(inRange))
+  }, [desde, hasta, estadoCortes])
+
+  const selectedArr = [...seleccion]
+  const nConflicto = selectedArr.filter(f => conflictoSet.has(f)).length
+
+  const aplicar = async () => {
+    const p = Number(pct)
+    if (selectedArr.length === 0) { toast.error('Selecciona al menos un día.'); return }
+    if (pct === '' || p < 0 || p > 100) { toast.error('Ingresa un % válido (0–100).'); return }
+    setAplicando(true)
+    try {
+      const res = await aplicarAvanceEfectivoFechas(selectedArr, p, { sobrescribirConfirmados: sobrescribir })
+      if (res.actualizados > 0) toast.success(`${res.actualizados} corte(s) actualizados al ${p}%`)
+      else if (res.totalCortes === 0) toast.info('No hay cortes en los días seleccionados.')
+      else toast.info('Esos cortes ya tienen % — marca "sobrescribir" para reemplazarlos.')
+    } finally { setAplicando(false) }
+  }
+
+  const limpiar = () => { setSeleccion(new Set()); setDesde(null); setHasta(null) }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Aplica un <strong>% de área efectiva</strong> a los cortes de varios días. Elige un intervalo o
+        marca los días directamente en el calendario. Solo se pueden elegir días con cortes registrados.
+      </p>
+
+      <div className="border rounded-lg p-2 bg-white shadow-sm flex justify-center">
+        <DayPicker
+          mode="multiple"
+          selected={selectedArr.map(f => parseISO(f))}
+          onSelect={(days) => setSeleccion(new Set((days ?? []).map(d => format(d, 'yyyy-MM-dd'))))}
+          locale={es}
+          disabled={(day) => !aplicableDates.some(d => isSameDay(d, day))}
+          modifiers={{ conflicto: conflictoDates }}
+          modifiersStyles={{
+            conflicto: { backgroundColor: '#fde68a', color: '#92400e', borderRadius: '6px' },
+            selected:  { outline: '2px solid #16a34a', outlineOffset: '-2px', borderRadius: '6px', fontWeight: 700 },
+          }}
+        />
+      </div>
+      <Leyenda items={[
+        ['bg-white border border-gray-300', 'Se puede aplicar'],
+        ['bg-amber-300', 'Ya tiene % (conflicto)'],
+        ['bg-gray-200', 'Sin cortes (bloqueado)'],
+      ]} />
+
+      {/* Intervalo */}
+      <div className="grid grid-cols-2 gap-2">
+        <CalendarPicker label="Desde" value={desde} onChange={setDesde} maxDate={new Date()} placeholder="—" />
+        <CalendarPicker label="Hasta" value={hasta} onChange={setHasta} maxDate={new Date()}
+          minDate={desde ? parseISO(desde) : undefined} placeholder="—" />
+      </div>
+
+      {/* Panel de aplicación */}
+      <div className="border rounded-lg p-3 bg-gray-50/60 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+            <Percent size={14} className="text-green-700" />
+            {selectedArr.length} día{selectedArr.length === 1 ? '' : 's'} seleccionado{selectedArr.length === 1 ? '' : 's'}
+          </p>
+          {selectedArr.length > 0 && (
+            <button type="button" onClick={limpiar} className="text-xs text-muted-foreground underline hover:text-foreground">
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        {nConflicto > 0 && (
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2 space-y-1.5">
+            <p className="flex items-center gap-1.5 font-medium">
+              <AlertTriangle size={13} /> {nConflicto} día{nConflicto === 1 ? '' : 's'} ya {nConflicto === 1 ? 'tiene' : 'tienen'} % puesto
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={sobrescribir} onChange={e => setSobrescribir(e.target.checked)} />
+              Sobrescribir también los que ya tienen %
+            </label>
+            {!sobrescribir && <p className="text-amber-700">Sin sobrescribir, esos días se omiten.</p>}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">% Área efectiva a aplicar</Label>
+            <Input type="number" min={0} max={100} inputMode="numeric" placeholder="Ej: 85"
+              value={pct} onChange={e => setPct(e.target.value)} className="w-28" />
+          </div>
+          <Button type="button" onClick={aplicar} disabled={aplicando || selectedArr.length === 0}
+            className="bg-green-600 hover:bg-green-700">
+            {aplicando ? 'Aplicando…' : 'Aplicar %'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Leyenda({ items }: { items: [string, string][] }) {
+  return (
+    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground justify-center">
+      {items.map(([cls, label]) => (
+        <span key={label} className="flex items-center gap-1.5">
+          <i className={`w-3 h-3 rounded-sm inline-block ${cls}`} /> {label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════ VISTA/CAPTURA DE UN DÍA ═══════
 interface FilaEdit {
   detId: string
   actId: string
@@ -158,7 +315,6 @@ function RendimientoDia({
   const [filas, setFilas] = useState<FilaEdit[]>(() => buildFilas(inf))
   const [guardando, setGuardando] = useState(false)
 
-  // Si cambian los datos base (p. ej. tras sincronizar), reconstruye en modo vista.
   useEffect(() => {
     setFilas(buildFilas(inf))
     setEditando(inf.rendimientos.length === 0)
@@ -194,7 +350,6 @@ function RendimientoDia({
     }
   }
 
-  // Agrupar filas por actividad, conservando el orden.
   const grupos: { actNombre: string; items: { fila: FilaEdit; i: number }[] }[] = []
   filas.forEach((fila, i) => {
     const last = grupos[grupos.length - 1]
@@ -204,7 +359,6 @@ function RendimientoDia({
 
   return (
     <div className="space-y-4">
-      {/* Resumen de lo que se hizo ese día */}
       <section className="rounded-lg border bg-white p-3 text-sm space-y-1.5">
         <div className="flex items-center gap-2 text-muted-foreground">
           <MapPin size={14} className="text-green-700" />
@@ -217,7 +371,6 @@ function RendimientoDia({
         {reporte.novedades && <p className="text-xs text-muted-foreground pt-1">📝 {reporte.novedades}</p>}
       </section>
 
-      {/* Rendimiento: casilla para llenar + calcular */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-green-800">Rendimiento</h2>
@@ -253,14 +406,12 @@ function RendimientoDia({
                           <div className="space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Cantidad ({unidad})</Label>
                             <Input type="number" min={0} step="any" inputMode="decimal" placeholder="0"
-                              value={fila.cantidad}
-                              onChange={e => setFila(i, { cantidad: e.target.value })} />
+                              value={fila.cantidad} onChange={e => setFila(i, { cantidad: e.target.value })} />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Operarios (máx {totalOps})</Label>
                             <Input type="number" min={1} max={totalOps || undefined} inputMode="numeric" placeholder="0"
-                              value={fila.operarios}
-                              onChange={e => setFila(i, { operarios: e.target.value })} />
+                              value={fila.operarios} onChange={e => setFila(i, { operarios: e.target.value })} />
                           </div>
                         </div>
                       ) : (
@@ -270,7 +421,6 @@ function RendimientoDia({
                         </div>
                       )}
 
-                      {/* % Área efectiva (solo cortes) */}
                       {fila.esCorte && (
                         <div className="flex items-center justify-between gap-2 border-t border-red-100 pt-2">
                           <div className="flex items-center gap-2">
@@ -279,9 +429,7 @@ function RendimientoDia({
                           </div>
                           {editando ? (
                             <Input type="number" min={0} max={100} inputMode="numeric" placeholder="Ej: 85"
-                              value={fila.pct}
-                              onChange={e => setFila(i, { pct: e.target.value })}
-                              className="w-24 h-8" />
+                              value={fila.pct} onChange={e => setFila(i, { pct: e.target.value })} className="w-24 h-8" />
                           ) : (
                             <span className="text-sm font-semibold tabular-nums text-red-700">
                               {fila.pct !== '' ? `${fila.pct}%` : 'Pendiente'}

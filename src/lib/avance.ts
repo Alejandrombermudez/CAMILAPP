@@ -56,3 +56,39 @@ export async function aplicarAvanceEfectivo(
 
   return { actualizados: objetivo.length, yaConfirmados, totalCortes: cortes.length }
 }
+
+// Igual que aplicarAvanceEfectivo pero sobre un CONJUNTO de fechas concretas
+// (selección múltiple en el calendario), no un rango contiguo.
+export async function aplicarAvanceEfectivoFechas(
+  fechas: string[],
+  porcentaje: number,
+  opts: { sobrescribirConfirmados?: boolean } = {},
+): Promise<AvanceResultado> {
+  if (!fechas.length) return { actualizados: 0, yaConfirmados: 0, totalCortes: 0 }
+
+  const reportes = await db.reportes.where('fecha').anyOf(fechas).toArray()
+  if (!reportes.length) return { actualizados: 0, yaConfirmados: 0, totalCortes: 0 }
+
+  const reporteIds = reportes.map(r => r.id)
+  const rendimientos = await db.rendimiento.where('reporte_id').anyOf(reporteIds).toArray()
+
+  const detIds = Array.from(new Set(rendimientos.map(r => r.detalle_reporte_id).filter(Boolean)))
+  const detalles = await db.detalles_actividad.where('id').anyOf(detIds).toArray()
+  const corteDetIds = new Set(detalles.filter(d => d.es_corte).map(d => d.id))
+
+  const cortes = rendimientos.filter(r => corteDetIds.has(r.detalle_reporte_id))
+  const yaConfirmados = cortes.filter(r => r.porcentaje_area_efectiva !== null).length
+
+  const objetivo = opts.sobrescribirConfirmados
+    ? cortes
+    : cortes.filter(r => r.porcentaje_area_efectiva === null)
+
+  if (objetivo.length > 0) {
+    await db.rendimiento.where('id').anyOf(objetivo.map(r => r.id)).modify({ porcentaje_area_efectiva: porcentaje })
+    const reportesAfectados = Array.from(new Set(objetivo.map(r => r.reporte_id)))
+    await db.reportes.where('id').anyOf(reportesAfectados).modify({ sync_status: 'pending' })
+    syncPendingReports().catch(console.error)
+  }
+
+  return { actualizados: objetivo.length, yaConfirmados, totalCortes: cortes.length }
+}
