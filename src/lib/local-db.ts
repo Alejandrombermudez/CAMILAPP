@@ -34,6 +34,10 @@ export class CamilappDB extends Dexie {
       puntos:  'id, poligono_id, reporte_id, tipo, sync_status, local_id',
       nucleos: 'id, poligono_id, sync_status, local_id',
     })
+    // v3 — núcleos pasan a punto+escenario+tipo (trazado de diseños florísticos).
+    this.version(3).stores({
+      nucleos: 'id, reporte_id, poligono_id, escenario, tipo, sync_status, local_id',
+    })
   }
 }
 

@@ -27,6 +27,18 @@ try {
   // NEXT_PUBLIC_SUPABASE_URL ausente o inválida — se omite la regla de Supabase.
 }
 
+// Teselas del mapa (OpenStreetMap): CacheFirst para que el mapa funcione offline
+// tras verlo online (se cachean las teselas de la zona visitada).
+runtimeCaching.push({
+  urlPattern: /^https:\/\/[a-c]\.tile\.openstreetmap\.org\/.*/i,
+  handler: 'CacheFirst',
+  options: {
+    cacheName: 'osm-tiles',
+    expiration: { maxEntries: 3000, maxAgeSeconds: 30 * 24 * 60 * 60 },
+    cacheableResponse: { statuses: [0, 200] },
+  },
+})
+
 const withPWA = withPWAInit({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',

@@ -7,7 +7,7 @@ import { saveReporte } from '@/lib/sync'
 import { esCorteDetalle } from '@/lib/catalog-data'
 import Hoja1 from '@/components/form/Hoja1'
 import Hoja2 from '@/components/form/Hoja2'
-import type { ActividadReporte, DetalleActividadReporte } from '@/types'
+import type { ActividadReporte, DetalleActividadReporte, Nucleo } from '@/types'
 
 const TABS = ['hoja1', 'hoja2'] as const
 type Tab = typeof TABS[number]
@@ -48,6 +48,7 @@ export default function FormularioPage() {
       const local_id = crypto.randomUUID()
       const actividades: Omit<ActividadReporte, 'reporte_id'>[] = []
       const detalles: DetalleActividadReporte[] = []
+      const nucleos: Omit<Nucleo, 'reporte_id' | 'sync_status' | 'created_at'>[] = []
 
       store.actividadGrupos.forEach((grupo, i) => {
         const actId = crypto.randomUUID()
@@ -64,6 +65,24 @@ export default function FormularioPage() {
             es_corte: esCorteDetalle(detNombre),
             orden: j,
           })
+          // Trazado con punto GPS → núcleo
+          const tz = det.trazado
+          if (tz && tz.escenario && tz.tipo && tz.lat != null && tz.lng != null) {
+            const nid = crypto.randomUUID()
+            nucleos.push({
+              id: nid,
+              poligono_id: store.poligono_id,
+              escenario: tz.escenario,
+              tipo: tz.tipo,
+              lat: tz.lat,
+              lng: tz.lng,
+              altitud: null,
+              precision: null,
+              notas: null,
+              origen: 'gps',
+              local_id: nid,
+            })
+          }
         })
       })
 
@@ -82,6 +101,7 @@ export default function FormularioPage() {
         detalles,
         rendimientos: [],   // se llena después en la sección Rendimiento
         avances: [],
+        nucleos,
       })
 
       toast.success('Informe guardado. Registra el rendimiento en la sección Rendimiento cuando lo tengas.')

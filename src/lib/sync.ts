@@ -2,7 +2,7 @@ import { db } from './local-db'
 import { getSyncSecret } from './sync-auth'
 import type {
   Reporte, ActividadReporte, DetalleActividadReporte,
-  Rendimiento, AvanceEfectivo,
+  Rendimiento, AvanceEfectivo, Nucleo,
 } from '@/types'
 
 export type SyncResult =
@@ -77,6 +77,8 @@ interface SaveReporteInput {
   detalles: DetalleActividadReporte[]
   rendimientos: Omit<Rendimiento, 'reporte_id' | 'created_at'>[]
   avances: Omit<AvanceEfectivo, 'reporte_id' | 'created_at'>[]
+  // Núcleos de trazado (local-first; aún no entran en el sync a Supabase).
+  nucleos?: Omit<Nucleo, 'reporte_id' | 'sync_status' | 'created_at'>[]
 }
 
 export async function saveReporte(input: SaveReporteInput): Promise<string> {
@@ -111,6 +113,12 @@ export async function saveReporte(input: SaveReporteInput): Promise<string> {
     reporte_id: id,
     created_at: now,
   }))
+  const nucleos: Nucleo[] = (input.nucleos ?? []).map(n => ({
+    ...n,
+    reporte_id: id,
+    sync_status: 'pending',
+    created_at: now,
+  }))
 
   await db.transaction('rw', [
     db.reportes,
@@ -118,12 +126,14 @@ export async function saveReporte(input: SaveReporteInput): Promise<string> {
     db.detalles_actividad,
     db.rendimiento,
     db.avance_efectivo,
+    db.nucleos,
   ], async () => {
     await db.reportes.put(reporte)
     await db.actividades_reporte.bulkPut(actividades)
     await db.detalles_actividad.bulkPut(input.detalles)
     await db.rendimiento.bulkPut(rendimientos)
     await db.avance_efectivo.bulkPut(avances)
+    if (nucleos.length) await db.nucleos.bulkPut(nucleos)
   })
 
   syncPendingReports().catch(console.error)

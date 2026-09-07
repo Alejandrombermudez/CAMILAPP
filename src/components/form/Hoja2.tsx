@@ -11,8 +11,9 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
-import { esCorteDetalle, subactividadesPermitidas } from '@/lib/catalog-data'
-import type { ActividadGrupo, DetalleSeleccionado } from '@/types'
+import { esCorteDetalle, esTrazado, subactividadesPermitidas } from '@/lib/catalog-data'
+import { TrazadoPanel } from '@/components/TrazadoPanel'
+import type { ActividadGrupo, DetalleSeleccionado, TrazadoNucleo } from '@/types'
 
 export default function Hoja2({
   onNext,
@@ -196,9 +197,9 @@ export default function Hoja2({
               <div className="space-y-2">
                 <Label className="text-xs">Subactividades</Label>
 
-                {/* Selected details as chips */}
+                {/* Selected details as chips (las que no son trazado) */}
                 <div className="flex flex-wrap gap-2">
-                  {grupo.detalles.map(det => (
+                  {grupo.detalles.filter(d => !esTrazado(d.detalleNombre)).map(det => (
                     <Badge
                       key={det.tempId}
                       variant={det.esCorte ? 'destructive' : 'success'}
@@ -217,6 +218,26 @@ export default function Hoja2({
                     </Badge>
                   ))}
                 </div>
+
+                {/* Trazado de diseños → panel de escenario/tipo/GPS */}
+                {grupo.detalles.filter(d => esTrazado(d.detalleNombre)).map(det => (
+                  <div key={det.tempId} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-green-700">✎ Trazado de los diseños</span>
+                      <button
+                        type="button"
+                        onClick={() => removeDetalle(grupo.tempId, det.tempId)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                    <TrazadoPanel
+                      value={det.trazado}
+                      onChange={(t: TrazadoNucleo) => updateDetalle(grupo.tempId, det.tempId, { trazado: t })}
+                    />
+                  </div>
+                ))}
 
                 {/* If "Otra" activity → only "Otro" detail allowed */}
                 {grupo.esOtra ? (

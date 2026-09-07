@@ -7,6 +7,12 @@ export function esCorteDetalle(nombre: string): boolean {
   return nombre.toLowerCase().includes('corte')
 }
 
+// Subactividad que dispara el flujo de trazado (escenario + tipo + GPS → núcleo).
+export const TRAZADO_DETALLE = 'Trazado de los diseños establecidos'
+export function esTrazado(nombre: string): boolean {
+  return nombre.trim().toLowerCase() === TRAZADO_DETALLE.toLowerCase()
+}
+
 // Catalog ids are defined here (not auto-assigned by Supabase) so the offline
 // fallback, the Supabase seed and the synced reportes all reference the SAME id.
 const POLIGONOS_RAW: Omit<Poligono, 'id'>[] = [

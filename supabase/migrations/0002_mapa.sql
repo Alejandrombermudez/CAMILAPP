@@ -30,18 +30,23 @@ create table if not exists puntos (
 create index if not exists puntos_poligono_id_idx on puntos (poligono_id);
 create index if not exists puntos_reporte_id_idx  on puntos (reporte_id);
 
+-- Núcleo = punto de trazado de un módulo de nucleación (escenario + tipo).
 create table if not exists nucleos (
   id          uuid primary key default gen_random_uuid(),
+  reporte_id  uuid references reportes (id) on delete set null,
   poligono_id integer references poligonos (id),
-  nombre      text not null default '',
-  descripcion text,
-  vertices    jsonb not null default '[]',   -- [{ "lat": .., "lng": .. }, ...]
-  radio       double precision,
+  escenario   text not null,                 -- clave del escenario (diseño florístico)
+  tipo        integer not null,              -- 1-4 (tipo de núcleo)
+  lat         double precision not null,
+  lng         double precision not null,
+  altitud     double precision,
+  precision   double precision,
   notas       text,
-  origen      text not null default 'import',
+  origen      text not null default 'gps',
   local_id    text not null unique,
   created_at  timestamptz not null default now()
 );
+create index if not exists nucleos_reporte_id_idx  on nucleos (reporte_id);
 create index if not exists nucleos_poligono_id_idx on nucleos (poligono_id);
 
 -- ── Row Level Security ───────────────────────────────────────────────────────

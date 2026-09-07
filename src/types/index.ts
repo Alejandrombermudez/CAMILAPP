@@ -108,15 +108,19 @@ export interface Punto {
   created_at: string
 }
 
-// Núcleo de restauración: área/agrupación. `vertices` con 1 punto = marcador,
-// con ≥3 = polígono (p. ej. importado de un shapefile/KML).
+// Núcleo de restauración = punto donde se traza un módulo de nucleación, con su
+// escenario (diseño florístico) y tipo (1-4). Se captura por GPS al registrar la
+// subactividad "Trazado de los diseños establecidos". Local-first como los reportes.
 export interface Nucleo {
   id: string
+  reporte_id: string | null     // informe donde se capturó
   poligono_id: number | null
-  nombre: string
-  descripcion: string | null
-  vertices: LatLng[]
-  radio: number | null          // m (opcional, para dibujar como círculo)
+  escenario: string             // clave del escenario (ver designs-data)
+  tipo: number                  // 1-4 (tipo de núcleo)
+  lat: number
+  lng: number
+  altitud: number | null
+  precision: number | null
   notas: string | null
   origen: OrigenGeo
   sync_status: SyncStatus
@@ -125,12 +129,23 @@ export interface Nucleo {
 }
 
 // ── Form-level types (used in Zustand store + components) ─────
+// Datos del trazado (solo para la subactividad "Trazado de los diseños establecidos"):
+// escenario + tipo elegidos y el punto GPS capturado. Al guardar el informe se
+// materializa en un registro `Nucleo`.
+export interface TrazadoNucleo {
+  escenario: string
+  tipo: number
+  lat: number | null
+  lng: number | null
+}
+
 export interface DetalleSeleccionado {
   tempId: string
   detalleNombre: string
   esOtro: boolean
   customNombre: string
   esCorte: boolean
+  trazado?: TrazadoNucleo
 }
 
 export interface ActividadGrupo {
