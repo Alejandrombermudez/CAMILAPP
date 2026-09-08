@@ -10,6 +10,8 @@ const REVISION = process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now())
 // Las rutas dinámicas (p. ej. /mis-formularios/[id]) caen al fallback offline.
 const rutasEstaticas = ['/formulario', '/rendimiento', '/mapa', '/mis-formularios', '/estadisticas']
 const additionalManifestEntries = rutasEstaticas.map((url) => ({ url, revision: REVISION }))
+// Mapas de diseño georreferenciados → precacheados para el mapa offline.
+additionalManifestEntries.push({ url: '/mapas/arrayan2.jpg', revision: REVISION })
 
 // Regla específica de Supabase (NetworkFirst) para cachear el catálogo offline.
 const runtimeCaching = []

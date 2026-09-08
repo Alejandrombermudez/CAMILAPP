@@ -139,3 +139,80 @@ export async function saveReporte(input: SaveReporteInput): Promise<string> {
   syncPendingReports().catch(console.error)
   return id
 }
+
+// Actualiza un informe existente (mismo id/local_id). Reemplaza actividades,
+// detalles y núcleos, y PRESERVA el rendimiento re-emparejando por
+// (actividad + subactividad), para no perder cantidades al editar. Marca pending.
+// NOTA: el /api/sync solo hace upsert (no borra), así que los hijos que se quiten
+// al editar quedan huérfanos en Supabase hasta que se implemente el borrado en sync.
+export async function updateReporte(reporteId: string, input: SaveReporteInput): Promise<void> {
+  const now = new Date().toISOString()
+  await db.transaction('rw', [
+    db.reportes, db.actividades_reporte, db.detalles_actividad,
+    db.rendimiento, db.nucleos,
+  ], async () => {
+    const old = await db.reportes.get(reporteId)
+    if (!old) throw new Error('El informe no existe')
+
+    // Re-emparejar rendimiento por clave (actividad_nombre || detalle_nombre)
+    const oldActs = await db.actividades_reporte.where('reporte_id').equals(reporteId).toArray()
+    const oldActName = new Map(oldActs.map(a => [a.id, a.actividad_nombre]))
+    const oldDets = await db.detalles_actividad.where('actividad_reporte_id').anyOf(oldActs.map(a => a.id)).toArray()
+    const oldDetById = new Map(oldDets.map(d => [d.id, d]))
+    const oldRend = await db.rendimiento.where('reporte_id').equals(reporteId).toArray()
+    const key = (act: string, det: string) => `${act}||${det}`
+    const rendByKey = new Map<string, Rendimiento>()
+    for (const r of oldRend) {
+      const det = oldDetById.get(r.detalle_reporte_id)
+      if (det) rendByKey.set(key(oldActName.get(det.actividad_reporte_id) ?? '', det.detalle_nombre), r)
+    }
+
+    const newActName = new Map(input.actividades.map(a => [a.id, a.actividad_nombre]))
+    const newRend: Rendimiento[] = []
+    for (const det of input.detalles) {
+      const prev = rendByKey.get(key(newActName.get(det.actividad_reporte_id) ?? '', det.detalle_nombre))
+      if (prev) {
+        newRend.push({
+          ...prev,
+          id: crypto.randomUUID(),
+          reporte_id: reporteId,
+          actividad_reporte_id: det.actividad_reporte_id,
+          detalle_reporte_id: det.id,
+          created_at: now,
+        })
+      }
+    }
+
+    // Borrar hijos viejos
+    await db.rendimiento.where('reporte_id').equals(reporteId).delete()
+    if (oldActs.length) await db.detalles_actividad.where('actividad_reporte_id').anyOf(oldActs.map(a => a.id)).delete()
+    await db.actividades_reporte.where('reporte_id').equals(reporteId).delete()
+    await db.nucleos.where('reporte_id').equals(reporteId).delete()
+
+    // Actualizar cabecera (conserva id, local_id, created_at)
+    await db.reportes.update(reporteId, {
+      profesional: input.profesional,
+      fecha: input.fecha,
+      poligono_id: input.poligono_id,
+      numeros_cuadrilla: input.numeros_cuadrilla,
+      operarios_hombre: input.operarios_hombre,
+      operarios_mujer: input.operarios_mujer,
+      hora_ingreso: input.hora_ingreso,
+      hora_salida: input.hora_salida,
+      novedades: input.novedades,
+      sync_status: 'pending',
+      updated_at: now,
+    })
+
+    // Insertar hijos nuevos
+    await db.actividades_reporte.bulkPut(input.actividades.map(a => ({ ...a, reporte_id: reporteId })))
+    await db.detalles_actividad.bulkPut(input.detalles)
+    if (newRend.length) await db.rendimiento.bulkPut(newRend)
+    const nucleos: Nucleo[] = (input.nucleos ?? []).map(n => ({
+      ...n, reporte_id: reporteId, sync_status: 'pending', created_at: now,
+    }))
+    if (nucleos.length) await db.nucleos.bulkPut(nucleos)
+  })
+
+  syncPendingReports().catch(console.error)
+}

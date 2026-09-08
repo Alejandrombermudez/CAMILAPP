@@ -17,6 +17,7 @@ const defaultState = () => ({
   rendimientoFilas:   [] as RendimientoFila[],
   avance_fecha_inicio: null as string | null,
   avance_fecha_fin:    null as string | null,
+  editandoId:         null as string | null,
 })
 
 export const useFormStore = create<FormStoreState>()(
@@ -35,6 +36,7 @@ export const useFormStore = create<FormStoreState>()(
           ),
         })),
       setAvanceFechas: (inicio, fin) => set({ avance_fecha_inicio: inicio, avance_fecha_fin: fin }),
+      setEditandoId: (id) => set({ editandoId: id }),
       resetForm: () => set({ ...defaultState(), fecha: format(new Date(), 'yyyy-MM-dd') }),
     }),
     {
@@ -59,6 +61,7 @@ export const useFormStore = create<FormStoreState>()(
         rendimientoFilas: s.rendimientoFilas,
         avance_fecha_inicio: s.avance_fecha_inicio,
         avance_fecha_fin: s.avance_fecha_fin,
+        editandoId: s.editandoId,
       }),
     }
   )

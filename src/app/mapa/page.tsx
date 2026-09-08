@@ -3,10 +3,11 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
-import { MapPin, Crosshair, Trash2 } from 'lucide-react'
+import { MapPin, Crosshair, Trash2, Layers, LocateFixed } from 'lucide-react'
 import { db } from '@/lib/local-db'
 import { useCatalog } from '@/components/CatalogProvider'
 import { TIPOS_NUCLEO, tipoColor } from '@/lib/designs-data'
+import { OVERLAYS } from '@/lib/mapas-overlay'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,23 @@ export default function MapaPage() {
   const { poligonos } = useCatalog()
   const nucleos = useLiveQuery(() => db.nucleos.toArray(), [])
   const puntos = useLiveQuery(async () => (await db.puntos.toArray()).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)), [])
+
+  // Overlay del mapa de diseño + ubicación del usuario
+  const overlay = OVERLAYS[0]
+  const [overlayOn, setOverlayOn] = useState(true)
+  const [opacidad, setOpacidad] = useState(0.85)
+  const [userPos, setUserPos] = useState<[number, number] | null>(null)
+  const [ubicando, setUbicando] = useState(false)
+
+  const ubicarme = () => {
+    if (!('geolocation' in navigator)) { toast.error('Este dispositivo no tiene GPS.'); return }
+    setUbicando(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => { setUserPos([pos.coords.latitude, pos.coords.longitude]); setUbicando(false); toast.success(`Ubicación (±${Math.round(pos.coords.accuracy)} m)`) },
+      err => { setUbicando(false); toast.error(`No se pudo ubicar: ${err.message}`) },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
 
   const [nombre, setNombre] = useState('')
   const [tipo, setTipo] = useState<PuntoTipo>('nido')
@@ -81,7 +99,31 @@ export default function MapaPage() {
       </div>
 
       {/* Mapa */}
-      <MapaNucleos nucleos={nucleos ?? []} puntos={puntos ?? []} />
+      <MapaNucleos
+        nucleos={nucleos ?? []}
+        puntos={puntos ?? []}
+        overlay={overlayOn ? overlay : null}
+        overlayOpacity={opacidad}
+        userPos={userPos}
+      />
+
+      {/* Controles del mapa */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={overlayOn} onChange={e => setOverlayOn(e.target.checked)} />
+          <Layers size={14} className="text-green-700" /> {overlay.nombre}
+        </label>
+        {overlayOn && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Opacidad
+            <input type="range" min={0.2} max={1} step={0.05} value={opacidad}
+              onChange={e => setOpacidad(Number(e.target.value))} className="w-24" />
+          </label>
+        )}
+        <Button type="button" size="sm" variant="outline" onClick={ubicarme} disabled={ubicando} className="ml-auto">
+          <LocateFixed size={14} className="mr-1.5" /> {ubicando ? 'Ubicando…' : 'Mi ubicación'}
+        </Button>
+      </div>
 
       {/* Leyenda */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">

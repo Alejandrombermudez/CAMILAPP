@@ -1,7 +1,9 @@
 import { db } from './local-db'
 import { syncPendingReports } from './sync'
+import { esTrazado } from './catalog-data'
 import type {
   Reporte, ActividadReporte, DetalleActividadReporte, Rendimiento,
+  ActividadGrupo, DetalleSeleccionado,
 } from '@/types'
 
 // ── Resumen para las tarjetas de "Mis formularios" ──────────────
@@ -191,6 +193,57 @@ export async function guardarRendimientoReporte(
     await db.reportes.update(reporteId, { sync_status: 'pending', updated_at: now })
   })
   syncPendingReports().catch(console.error)
+}
+
+// ── Cargar un informe para editarlo en el formulario ───────────
+export interface EdicionReporte {
+  reporteId: string
+  hoja1: Pick<Reporte,
+    'profesional' | 'fecha' | 'poligono_id' | 'numeros_cuadrilla' |
+    'operarios_hombre' | 'operarios_mujer' | 'hora_ingreso' | 'hora_salida'>
+  novedades: string
+  actividadGrupos: ActividadGrupo[]
+}
+
+export async function prepararEdicion(reporteId: string): Promise<EdicionReporte | null> {
+  const d = await getReporteDetalle(reporteId)
+  if (!d) return null
+  const nucleos = await db.nucleos.where('reporte_id').equals(reporteId).toArray()
+  const acts = [...d.actividades].sort((a, b) => a.orden - b.orden)
+
+  const actividadGrupos: ActividadGrupo[] = acts.map(act => {
+    const dets = d.detalles.filter(x => x.actividad_reporte_id === act.id).sort((a, b) => a.orden - b.orden)
+    const detalles: DetalleSeleccionado[] = dets.map(det => {
+      const nuc = esTrazado(det.detalle_nombre) ? nucleos.shift() : undefined
+      return {
+        tempId: crypto.randomUUID(),
+        detalleNombre: det.es_otro ? '' : det.detalle_nombre,
+        esOtro: det.es_otro,
+        customNombre: det.es_otro ? det.detalle_nombre : '',
+        esCorte: det.es_corte,
+        trazado: nuc ? { escenario: nuc.escenario, tipo: nuc.tipo, lat: nuc.lat, lng: nuc.lng } : undefined,
+      }
+    })
+    return {
+      tempId: crypto.randomUUID(),
+      actividadNombre: act.es_otra ? '' : act.actividad_nombre,
+      esOtra: act.es_otra,
+      customNombre: act.es_otra ? act.actividad_nombre : '',
+      detalles,
+    }
+  })
+
+  const r = d.reporte
+  return {
+    reporteId,
+    hoja1: {
+      profesional: r.profesional, fecha: r.fecha, poligono_id: r.poligono_id,
+      numeros_cuadrilla: r.numeros_cuadrilla, operarios_hombre: r.operarios_hombre,
+      operarios_mujer: r.operarios_mujer, hora_ingreso: r.hora_ingreso, hora_salida: r.hora_salida,
+    },
+    novedades: r.novedades ?? '',
+    actividadGrupos,
+  }
 }
 
 // ── Confirmar % área efectiva de cortes ─────────────────────────

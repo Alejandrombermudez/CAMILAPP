@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useFormStore } from '@/hooks/useFormStore'
-import { saveReporte } from '@/lib/sync'
+import { saveReporte, updateReporte } from '@/lib/sync'
 import { esCorteDetalle } from '@/lib/catalog-data'
 import Hoja1 from '@/components/form/Hoja1'
 import Hoja2 from '@/components/form/Hoja2'
@@ -86,8 +86,9 @@ export default function FormularioPage() {
         })
       })
 
-      await saveReporte({
-        local_id,
+      const editando = store.editandoId
+      const input = {
+        local_id: editando ?? local_id,   // updateReporte ignora local_id
         profesional:       store.profesional,
         fecha:             store.fecha,
         poligono_id:       store.poligono_id,
@@ -99,14 +100,20 @@ export default function FormularioPage() {
         novedades:         store.novedades || null,
         actividades,
         detalles,
-        rendimientos: [],   // se llena después en la sección Rendimiento
+        rendimientos: [],   // se llena/preserva en la sección Rendimiento
         avances: [],
         nucleos,
-      })
+      }
 
-      toast.success('Informe guardado. Registra el rendimiento en la sección Rendimiento cuando lo tengas.')
+      if (editando) {
+        await updateReporte(editando, input)
+        toast.success('Cambios guardados')
+      } else {
+        await saveReporte(input)
+        toast.success('Informe guardado. Registra el rendimiento en la sección Rendimiento cuando lo tengas.')
+      }
       store.resetForm()
-      router.push('/mis-formularios')
+      router.push(editando ? `/mis-formularios/${editando}` : '/mis-formularios')
     } finally {
       savingRef.current = false
     }
@@ -118,9 +125,18 @@ export default function FormularioPage() {
     <div className="space-y-4">
       {/* Header + progress */}
       <div>
-        <h1 className="text-xl font-bold text-green-800">Informe de Campo</h1>
+        <h1 className="text-xl font-bold text-green-800">
+          {store.editandoId ? 'Editar informe' : 'Informe de Campo'}
+        </h1>
         <p className="text-xs text-muted-foreground mt-0.5">{TAB_LABELS[activeTab]}</p>
       </div>
+
+      {store.editandoId && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ✎ Estás editando un informe guardado. Al guardar se actualizará; el rendimiento ya
+          registrado se conserva mientras no cambies las subactividades.
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex gap-1">

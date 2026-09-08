@@ -1,13 +1,14 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, MapPin, Users, Clock } from 'lucide-react'
-import { getReporteDetalle, confirmarPorcentajesCorte } from '@/lib/reportes'
+import { ChevronLeft, MapPin, Users, Clock, Pencil } from 'lucide-react'
+import { getReporteDetalle, confirmarPorcentajesCorte, prepararEdicion } from '@/lib/reportes'
+import { useFormStore } from '@/hooks/useFormStore'
 import { estadoCorte } from '@/lib/avance'
 import { EstadoCorteBadge } from '@/components/EstadoCorteBadge'
 import { useCatalog } from '@/components/CatalogProvider'
@@ -22,8 +23,21 @@ export default function DetalleFormularioPage() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : (params.id ?? '')
   const { poligonos } = useCatalog()
+  const router = useRouter()
+  const store = useFormStore()
 
   const detalle = useLiveQuery(() => getReporteDetalle(id), [id])
+
+  const editar = async () => {
+    const ed = await prepararEdicion(id)
+    if (!ed) { toast.error('No se pudo cargar el informe.'); return }
+    store.resetForm()
+    store.patchHoja1(ed.hoja1)
+    store.setActividadGrupos(ed.actividadGrupos)
+    store.setNovedades(ed.novedades)
+    store.setEditandoId(ed.reporteId)
+    router.push('/formulario')
+  }
 
   const [pcts, setPcts] = useState<Record<string, string>>({})
   const [guardando, setGuardando] = useState(false)
@@ -100,10 +114,15 @@ export default function DetalleFormularioPage() {
 
   return (
     <div className="space-y-5">
-      {/* Volver */}
-      <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
-        <Link href="/mis-formularios"><ChevronLeft size={16} className="mr-1" /> Mis formularios</Link>
-      </Button>
+      {/* Volver + Editar */}
+      <div className="flex items-center justify-between">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
+          <Link href="/mis-formularios"><ChevronLeft size={16} className="mr-1" /> Mis formularios</Link>
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={editar}>
+          <Pencil size={14} className="mr-1.5" /> Editar
+        </Button>
+      </div>
 
       {/* Encabezado */}
       <div className="space-y-1">

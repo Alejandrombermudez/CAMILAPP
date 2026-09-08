@@ -189,6 +189,9 @@ export interface FormStoreState {
   avance_fecha_inicio: string | null
   avance_fecha_fin: string | null
 
+  // Edición: id del informe que se está editando (null = nuevo)
+  editandoId: string | null
+
   // Actions
   patchHoja1: (data: Partial<Pick<FormStoreState,
     'profesional' | 'fecha' | 'poligono_id' | 'numeros_cuadrilla' |
@@ -199,5 +202,6 @@ export interface FormStoreState {
   setRendimientoFilas: (filas: RendimientoFila[]) => void
   patchRendimientoFila: (tempId: string, patch: Partial<RendimientoFila>) => void
   setAvanceFechas: (inicio: string | null, fin: string | null) => void
+  setEditandoId: (id: string | null) => void
   resetForm: () => void
 }
